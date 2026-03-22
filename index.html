@@ -692,11 +692,7 @@
 
 <header>
   <h1>Family Tree</h1>
-  <div class="header-actions">
-    <div class="dirty-dot" id="dirty-dot" title="Unsaved changes"></div>
-    <button class="btn-ghost" onclick="showHistory()">History</button>
-    <button class="btn-save-main" id="btn-save-main" onclick="saveExplicit()">Saved</button>
-  </div>
+  <div class="header-actions"></div>
 </header>
 
 <div id="canvas-wrapper">
@@ -840,29 +836,15 @@ const MAX_VERS    = 15;
 
 // ── Dirty / save state ────────────────────────────────────────────────────────
 let isDirty = false;
+let _saveTimer = null;
 
 function markDirty() {
   isDirty = true;
-  _setSaveBtn('dirty');
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveExplicit, 1500);
 }
 
-function _setSaveBtn(state) {
-  const btn = document.getElementById('btn-save-main');
-  const dot = document.getElementById('dirty-dot');
-  btn.className = 'btn-save-main';
-  if (state === 'dirty') {
-    btn.textContent = 'Save';
-    btn.classList.add('dirty');
-    dot.classList.add('on');
-  } else if (state === 'saving') {
-    btn.textContent = 'Saving…';
-    btn.classList.add('saving');
-    dot.classList.remove('on');
-  } else {
-    btn.textContent = 'Saved';
-    dot.classList.remove('on');
-  }
-}
+function _setSaveBtn() {} // no-op — buttons removed
 
 // ── Explicit save (creates a version) ────────────────────────────────────────
 async function saveExplicit() {
