@@ -930,7 +930,16 @@ async function restoreVersion(key) {
   const v = snap.val();
   if (!v) return;
 
-  people  = v.people  || {};
+  const raw = v.people || {};
+  people = {};
+  for (const [id, p] of Object.entries(raw)) {
+    people[id] = {
+      ...p,
+      parentIds: p.parentIds || [],
+      siblings:  p.siblings  || [],
+      partners:  p.partners  || [],
+    };
+  }
   rootId  = v.rootId  || null;
   counter = v.counter || 0;
 
@@ -952,6 +961,9 @@ function _fmtTs(ts) {
 function _countPpl(obj) { return obj ? Object.keys(obj).length : 0; }
 
 function _syncUI() {
+  // Treat as empty if rootId points to a person that doesn't exist
+  if (rootId && !people[rootId]) rootId = null;
+
   if (rootId) {
     document.getElementById('empty-state').classList.add('hidden');
   } else {
@@ -1422,7 +1434,18 @@ currentRef.on('value', snapshot => {
 
   const d = snapshot.val();
   if (d) {
-    people  = d.people  || {};
+    // Firebase omits empty arrays on save; restore them so the app never
+    // sees undefined where it expects [].
+    const raw = d.people || {};
+    people = {};
+    for (const [id, p] of Object.entries(raw)) {
+      people[id] = {
+        ...p,
+        parentIds: p.parentIds || [],
+        siblings:  p.siblings  || [],
+        partners:  p.partners  || [],
+      };
+    }
     rootId  = d.rootId  || null;
     counter = d.counter || 0;
   } else {
