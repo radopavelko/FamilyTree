@@ -503,6 +503,150 @@
 
     .panel-close:hover { color: #475569; }
 
+    /* ── Save button / dirty state ──────────────── */
+    .btn-save-main {
+      padding: 5px 16px;
+      background: #94A3B8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: default;
+      opacity: .7;
+      transition: background .2s, box-shadow .2s, opacity .2s;
+    }
+
+    .btn-save-main.dirty {
+      background: #0F766E;
+      cursor: pointer;
+      opacity: 1;
+      animation: pulse-save 1.8s ease-in-out infinite;
+    }
+
+    .btn-save-main.dirty:hover { background: #0D9488; }
+
+    .btn-save-main.saving {
+      background: #64748B;
+      cursor: default;
+      opacity: 1;
+      animation: none;
+    }
+
+    @keyframes pulse-save {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(15,118,110,.45); }
+      55%       { box-shadow: 0 0 0 6px rgba(15,118,110,0); }
+    }
+
+    .dirty-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #F59E0B;
+      flex-shrink: 0;
+      display: none;
+    }
+
+    .dirty-dot.on { display: block; }
+
+    /* ── History overlay ─────────────────────────── */
+    #history-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,.4);
+      z-index: 120;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .history-modal {
+      background: #fff;
+      border-radius: 14px;
+      width: 420px;
+      max-height: 78vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,.2);
+      overflow: hidden;
+    }
+
+    .history-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid #E2E8F0;
+      flex-shrink: 0;
+    }
+
+    .history-head h2 { font-size: 15px; font-weight: 600; }
+
+    .history-close {
+      background: none; border: none;
+      font-size: 20px; line-height: 1;
+      cursor: pointer; color: #CBD5E1;
+    }
+
+    .history-close:hover { color: #475569; }
+
+    .history-list { overflow-y: auto; flex: 1; }
+
+    .ver-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 20px;
+      border-bottom: 1px solid #F8FAFC;
+    }
+
+    .ver-item:last-child { border-bottom: none; }
+
+    .ver-info { flex: 1; }
+
+    .ver-time {
+      font-size: 13px;
+      font-weight: 500;
+      color: #1E293B;
+    }
+
+    .ver-detail {
+      font-size: 11px;
+      color: #94A3B8;
+      margin-top: 2px;
+    }
+
+    .ver-badge {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #0F766E;
+      background: #CCFBF1;
+      padding: 2px 8px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+
+    .btn-restore {
+      padding: 5px 12px;
+      border: 1px solid #E2E8F0;
+      background: #fff;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #475569;
+      flex-shrink: 0;
+      font-family: inherit;
+    }
+
+    .btn-restore:hover { background: #F1F5F9; border-color: #CBD5E1; }
+
+    .history-empty {
+      padding: 48px 20px;
+      text-align: center;
+      color: #94A3B8;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
     /* ── Zoom controls ──────────────────────────── */
     #zoom-controls {
       position: fixed;
@@ -548,7 +692,9 @@
 <header>
   <h1>Family Tree</h1>
   <div class="header-actions">
-    <button class="btn-ghost" id="btn-new" onclick="resetTree()" style="display:none">New Tree</button>
+    <div class="dirty-dot" id="dirty-dot" title="Unsaved changes"></div>
+    <button class="btn-ghost" onclick="showHistory()">History</button>
+    <button class="btn-save-main" id="btn-save-main" onclick="saveExplicit()">Saved</button>
   </div>
 </header>
 
@@ -620,6 +766,19 @@
   </div>
 </div>
 
+<!-- ── History overlay ────────────────────────────── -->
+<div id="history-overlay" class="hidden">
+  <div class="history-modal">
+    <div class="history-head">
+      <h2>Version History</h2>
+      <button class="history-close" onclick="closeHistory()">×</button>
+    </div>
+    <div class="history-list" id="history-list">
+      <div class="history-empty">Loading…</div>
+    </div>
+  </div>
+</div>
+
 <!-- hidden file input for photo uploads -->
 <input type="file" id="photo-input" accept="image/*" style="display:none">
 
@@ -668,17 +827,136 @@ let panelId = null;     // current side panel person id
 let selGender = 'unknown';
 
 // ── Firebase ──────────────────────────────────────────────────────────────────
-// NOTE: Firebase DB rules must allow read/write. Set in Firebase Console:
-//   { "rules": { ".read": true, ".write": true } }
-// NOTE: photos are stored as base64 — keep images small to stay under Firebase limits.
+// DB rules must allow read/write:  { "rules": { ".read": true, ".write": true } }
+// Photos are base64 — keep images small to stay within Firebase's payload limits.
 firebase.initializeApp({
   databaseURL: 'https://familytree-4b272-default-rtdb.europe-west1.firebasedatabase.app/'
 });
-const dbRef = firebase.database().ref('tree');
+const db          = firebase.database();
+const currentRef  = db.ref('tree/current');
+const versionsRef = db.ref('tree/versions');
+const MAX_VERS    = 15;
 
-function save() {
-  dbRef.set({ people, rootId, counter })
-    .catch(err => console.error('Save failed:', err));
+// ── Dirty / save state ────────────────────────────────────────────────────────
+let isDirty = false;
+
+function markDirty() {
+  isDirty = true;
+  _setSaveBtn('dirty');
+}
+
+function _setSaveBtn(state) {
+  const btn = document.getElementById('btn-save-main');
+  const dot = document.getElementById('dirty-dot');
+  btn.className = 'btn-save-main';
+  if (state === 'dirty') {
+    btn.textContent = 'Save';
+    btn.classList.add('dirty');
+    dot.classList.add('on');
+  } else if (state === 'saving') {
+    btn.textContent = 'Saving…';
+    btn.classList.add('saving');
+    dot.classList.remove('on');
+  } else {
+    btn.textContent = 'Saved';
+    dot.classList.remove('on');
+  }
+}
+
+// ── Explicit save (creates a version) ────────────────────────────────────────
+async function saveExplicit() {
+  if (!isDirty) return;
+  _setSaveBtn('saving');
+  const snapshot = { people, rootId, counter };
+  try {
+    await currentRef.set(snapshot);
+    await versionsRef.push({ ts: Date.now(), ...snapshot });
+    await _trimVersions();
+    isDirty = false;
+    _setSaveBtn('saved');
+  } catch (err) {
+    console.error('Save failed:', err);
+    _setSaveBtn('dirty');
+    alert('Save failed — check your connection and Firebase rules.');
+  }
+}
+
+// Keep only the newest MAX_VERS versions
+async function _trimVersions() {
+  const snap = await versionsRef.orderByChild('ts').once('value');
+  const keys = [];
+  snap.forEach(c => keys.push(c.key));
+  const stale = keys.slice(0, Math.max(0, keys.length - MAX_VERS));
+  await Promise.all(stale.map(k => versionsRef.child(k).remove()));
+}
+
+// ── Version history ───────────────────────────────────────────────────────────
+function showHistory() {
+  const overlay = document.getElementById('history-overlay');
+  const list    = document.getElementById('history-list');
+  overlay.classList.remove('hidden');
+  list.innerHTML = '<div class="history-empty">Loading…</div>';
+
+  versionsRef.orderByChild('ts').once('value', snap => {
+    const vers = [];
+    snap.forEach(c => vers.push({ key: c.key, ...c.val() }));
+    vers.reverse(); // newest first
+
+    if (!vers.length) {
+      list.innerHTML = '<div class="history-empty">No saved versions yet.<br>Click <strong>Save</strong> to create your first snapshot.</div>';
+      return;
+    }
+
+    list.innerHTML = vers.map((v, i) => `
+      <div class="ver-item">
+        <div class="ver-info">
+          <div class="ver-time">${_fmtTs(v.ts)}</div>
+          <div class="ver-detail">${_countPpl(v.people)} people in tree</div>
+        </div>
+        ${i === 0 ? '<span class="ver-badge">Latest</span>' : ''}
+        <button class="btn-restore" onclick="restoreVersion('${v.key}')">Restore</button>
+      </div>`).join('');
+  });
+}
+
+function closeHistory() {
+  document.getElementById('history-overlay').classList.add('hidden');
+}
+
+async function restoreVersion(key) {
+  if (!confirm('Restore this version? Unsaved changes will be lost.')) return;
+  const snap = await versionsRef.child(key).once('value');
+  const v = snap.val();
+  if (!v) return;
+
+  people  = v.people  || {};
+  rootId  = v.rootId  || null;
+  counter = v.counter || 0;
+
+  _syncUI();
+  render();
+  if (panelId && people[panelId]) openPanel(panelId);
+  else if (panelId) closePanel();
+  closeHistory();
+  markDirty(); // restored state must be explicitly saved as new current
+}
+
+function _fmtTs(ts) {
+  return new Date(ts).toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function _countPpl(obj) { return obj ? Object.keys(obj).length : 0; }
+
+function _syncUI() {
+  if (rootId) {
+    document.getElementById('empty-state').classList.add('hidden');
+  } else {
+    document.getElementById('empty-state').querySelector('p').textContent = 'Start your family tree';
+    document.getElementById('empty-state').classList.remove('hidden');
+  }
 }
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
@@ -812,7 +1090,7 @@ document.getElementById('photo-input').addEventListener('change', function (e) {
     } else {
       people[photoCtx.personId].siblings[photoCtx.idx].photo = url;
     }
-    save();
+    markDirty();
     render();
     if (panelId) openPanel(panelId);
   };
@@ -1000,16 +1278,15 @@ function saveModal() {
     const id = addPerson({ name, gender: selGender, birthYear, job, notes });
     rootId = id;
     document.getElementById('empty-state').classList.add('hidden');
-    document.getElementById('btn-new').style.display = '';
     closeModal();
-    save();
+    markDirty();
     render();
 
   } else if (ctx.type === 'parent') {
     const id = addPerson({ name, gender: selGender, birthYear, job, notes });
     people[ctx.childId].parentIds.push(id);
     closeModal();
-    save();
+    markDirty();
     render();
 
   } else if (ctx.type === 'edit') {
@@ -1021,7 +1298,7 @@ function saveModal() {
     p.notes     = notes;
     if (panelId === ctx.personId) openPanel(ctx.personId);
     closeModal();
-    save();
+    markDirty();
     render();
 
   } else if (ctx.type === 'rel') {
@@ -1030,9 +1307,9 @@ function saveModal() {
     if (ctx.relType === 'sibling') p.siblings.push(rel);
     else p.partners.push(rel);
     closeModal();
-    save();
+    markDirty();
     if (panelId) openPanel(panelId);
-    render(); // refresh badge
+    render();
   }
 }
 
@@ -1050,7 +1327,7 @@ function deletePerson(id) {
   delete people[id];
   closeModal();
   closePanel();
-  save();
+  markDirty();
   render();
 }
 
@@ -1107,7 +1384,7 @@ function removeRel(type, i) {
   const p = people[panelId];
   if (type === 'sibling') p.siblings.splice(i, 1);
   else p.partners.splice(i, 1);
-  save();
+  markDirty();
   render();
   openPanel(panelId);
 }
@@ -1122,24 +1399,11 @@ function closePanel() {
   panelId = null;
 }
 
-// ── Reset ─────────────────────────────────────────────────────────────────────
-function resetTree() {
-  if (!confirm('Start a new tree? All data will be cleared.')) return;
-  people  = {};
-  rootId  = null;
-  counter = 0;
-  scale   = 1;
-  document.getElementById('empty-state').classList.remove('hidden');
-  document.getElementById('btn-new').style.display = 'none';
-  closePanel();
-  save();
-  render();
-}
-
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (!document.getElementById('modal-overlay').classList.contains('hidden')) closeModal();
+    if (!document.getElementById('history-overlay').classList.contains('hidden')) closeHistory();
+    else if (!document.getElementById('modal-overlay').classList.contains('hidden')) closeModal();
     else closePanel();
   }
   if (e.key === 'Enter' && !document.getElementById('modal-overlay').classList.contains('hidden')) {
@@ -1148,37 +1412,35 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-// Show loading message until Firebase responds
 document.getElementById('empty-state').classList.remove('hidden');
 document.getElementById('empty-state').querySelector('p').textContent = 'Loading…';
 
-dbRef.on('value', snapshot => {
+currentRef.on('value', snapshot => {
+  // Don't overwrite unsaved local edits with remote changes
+  if (isDirty) return;
+
   const d = snapshot.val();
   if (d) {
     people  = d.people  || {};
     rootId  = d.rootId  || null;
     counter = d.counter || 0;
   } else {
-    // Nothing in DB yet
     people  = {};
     rootId  = null;
     counter = 0;
   }
 
-  if (rootId) {
-    document.getElementById('empty-state').classList.add('hidden');
-    document.getElementById('btn-new').style.display = '';
-  } else {
-    document.getElementById('empty-state').querySelector('p').textContent = 'Start your family tree';
-    document.getElementById('empty-state').classList.remove('hidden');
-    document.getElementById('btn-new').style.display = 'none';
-  }
-
+  _syncUI();
   render();
+  _setSaveBtn('saved');
 
-  // Keep side panel in sync if open
   if (panelId && people[panelId]) openPanel(panelId);
   else if (panelId) closePanel();
+});
+
+// Warn on refresh/close if there are unsaved changes
+window.addEventListener('beforeunload', e => {
+  if (isDirty) { e.preventDefault(); e.returnValue = ''; }
 });
 </script>
 </body>
