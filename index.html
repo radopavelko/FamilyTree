@@ -623,6 +623,10 @@
 <!-- hidden file input for photo uploads -->
 <input type="file" id="photo-input" accept="image/*" style="display:none">
 
+<!-- ── Firebase SDK ───────────────────────────────── -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
 <!-- ── Zoom ───────────────────────────────────────── -->
 <div id="zoom-controls">
   <button onclick="adjustZoom(1.2)" title="Zoom in">+</button>
@@ -663,19 +667,18 @@ let modal = null;       // current modal context
 let panelId = null;     // current side panel person id
 let selGender = 'unknown';
 
-// ── Persistence ───────────────────────────────────────────────────────────────
-function save() {
-  localStorage.setItem('ft_v1', JSON.stringify({ people, rootId, counter }));
-}
+// ── Firebase ──────────────────────────────────────────────────────────────────
+// NOTE: Firebase DB rules must allow read/write. Set in Firebase Console:
+//   { "rules": { ".read": true, ".write": true } }
+// NOTE: photos are stored as base64 — keep images small to stay under Firebase limits.
+firebase.initializeApp({
+  databaseURL: 'https://familytree-4b272-default-rtdb.europe-west1.firebasedatabase.app/'
+});
+const dbRef = firebase.database().ref('tree');
 
-function load() {
-  try {
-    const d = JSON.parse(localStorage.getItem('ft_v1') || 'null');
-    if (!d) return;
-    people  = d.people  || {};
-    rootId  = d.rootId  || null;
-    counter = d.counter || 0;
-  } catch (e) { /* ignore */ }
+function save() {
+  dbRef.set({ people, rootId, counter })
+    .catch(err => console.error('Save failed:', err));
 }
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
@@ -1145,12 +1148,38 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-load();
-if (rootId) {
-  document.getElementById('empty-state').classList.add('hidden');
-  document.getElementById('btn-new').style.display = '';
-}
-render();
+// Show loading message until Firebase responds
+document.getElementById('empty-state').classList.remove('hidden');
+document.getElementById('empty-state').querySelector('p').textContent = 'Loading…';
+
+dbRef.on('value', snapshot => {
+  const d = snapshot.val();
+  if (d) {
+    people  = d.people  || {};
+    rootId  = d.rootId  || null;
+    counter = d.counter || 0;
+  } else {
+    // Nothing in DB yet
+    people  = {};
+    rootId  = null;
+    counter = 0;
+  }
+
+  if (rootId) {
+    document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('btn-new').style.display = '';
+  } else {
+    document.getElementById('empty-state').querySelector('p').textContent = 'Start your family tree';
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('btn-new').style.display = 'none';
+  }
+
+  render();
+
+  // Keep side panel in sync if open
+  if (panelId && people[panelId]) openPanel(panelId);
+  else if (panelId) closePanel();
+});
 </script>
 </body>
 </html>
