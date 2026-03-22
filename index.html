@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Tree</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #F8FAFC;
+      color: #1E293B;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 52px;
+      background: #fff;
+      border-bottom: 1px solid #E2E8F0;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 30;
+    }
+
+    header h1 { font-size: 15px; font-weight: 600; letter-spacing: .01em; }
+
+    .header-actions { display: flex; gap: 8px; }
+
+    .btn-ghost {
+      padding: 5px 12px;
+      border: 1px solid #E2E8F0;
+      background: #fff;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #64748B;
+    }
+    .btn-ghost:hover { background: #F8FAFC; }
+
+    .btn-primary {
+      padding: 5px 14px;
+      background: #1E293B;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-primary:hover { background: #334155; }
+
+    /* ── Canvas ─────────────────────────────────── */
+    #canvas-wrapper {
+      position: fixed;
+      top: 52px; left: 0; right: 0; bottom: 0;
+      overflow: auto;
+    }
+
+    #canvas {
+      position: relative;
+      min-width: 100%;
+      min-height: 100%;
+      transform-origin: top left;
+    }
+
+    #svg-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+
+    #nodes-layer { position: absolute; top: 0; left: 0; }
+
+    /* ── Node ───────────────────────────────────── */
+    .node {
+      position: absolute;
+      width: 164px;
+      border-radius: 12px;
+      border: 1.5px solid;
+      padding: 13px 13px 10px;
+      user-select: none;
+      transition: box-shadow .15s, transform .1s;
+    }
+
+    .node:hover {
+      box-shadow: 0 6px 20px rgba(0,0,0,.1);
+      transform: translateY(-1px);
+    }
+
+    .node:hover .node-actions { opacity: 1; pointer-events: auto; }
+
+    .node-name {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.3;
+      word-break: break-word;
+      text-align: center;
+    }
+
+    .node-birth {
+      font-size: 11px;
+      margin-top: 1px;
+      opacity: .5;
+      text-align: center;
+    }
+
+    .node-job {
+      font-size: 11px;
+      margin-top: 3px;
+      font-style: italic;
+      opacity: .7;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    .node-notes {
+      font-size: 10px;
+      margin-top: 5px;
+      opacity: .55;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ── Node avatar ────────────────────────────── */
+    .node-avatar-wrap {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 9px;
+    }
+
+    .node-avatar {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: 2px solid;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-size: cover;
+      background-position: center;
+      transition: opacity .15s;
+    }
+
+    .node-avatar:hover { opacity: .82; }
+
+    .node-avatar .avatar-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.32);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0;
+      transition: opacity .15s;
+      border-radius: 50%;
+    }
+
+    .node-avatar:hover .avatar-overlay { opacity: 1; }
+    .node-avatar .avatar-overlay svg { display: block; }
+
+    /* ── Sibling dots ───────────────────────────── */
+    .sib-dots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    .sib-dot {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1.5px solid;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      overflow: hidden;
+      position: relative;
+      background-size: cover;
+      background-position: center;
+      transition: opacity .15s, transform .1s;
+    }
+
+    .sib-dot:hover { opacity: .75; transform: scale(1.12); }
+
+    .sib-dot .sib-photo-hint {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.3);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; border-radius: 50%;
+      transition: opacity .15s;
+    }
+
+    .sib-dot:hover .sib-photo-hint { opacity: 1; }
+
+    .sib-more {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1.5px dashed #CBD5E1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      color: #94A3B8;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .sib-more:hover { border-color: #94A3B8; color: #475569; }
+
+    .node-partners {
+      font-size: 10px;
+      margin-top: 5px;
+      opacity: .5;
+      cursor: pointer;
+    }
+
+    .node-partners:hover { opacity: .8; }
+
+    /* ── Chip avatar ─────────────────────────────── */
+    .chip-left {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .chip-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1.5px solid;
+      flex-shrink: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      background-size: cover;
+      background-position: center;
+      transition: opacity .15s;
+    }
+
+    .chip-avatar:hover { opacity: .75; }
+
+    .chip-avatar .chip-photo-hint {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.3);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; border-radius: 50%;
+      transition: opacity .15s;
+    }
+
+    .chip-avatar:hover .chip-photo-hint { opacity: 1; }
+
+    .node-actions {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .15s;
+    }
+
+    .node-actions button {
+      flex: 1;
+      padding: 3px 0;
+      border: 1px solid rgba(0,0,0,.13);
+      background: rgba(255,255,255,.65);
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .node-actions button:hover { background: rgba(255,255,255,.95); }
+
+    /* ── Empty state ────────────────────────────── */
+    #empty-state {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    #empty-state p { font-size: 14px; color: #94A3B8; margin-bottom: 16px; }
+
+    /* ── Modal ──────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,.35);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hidden { display: none !important; }
+
+    .modal {
+      background: #fff;
+      border-radius: 14px;
+      padding: 24px;
+      width: 310px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.18);
+    }
+
+    .modal h2 { font-size: 15px; font-weight: 600; margin-bottom: 20px; }
+
+    .form-field { margin-bottom: 14px; }
+
+    .form-field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: #64748B;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 5px;
+    }
+
+    .form-field input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #E2E8F0;
+      border-radius: 7px;
+      font-size: 14px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .form-field input:focus,
+    .form-field textarea:focus { border-color: #94A3B8; }
+
+    .form-field textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #E2E8F0;
+      border-radius: 7px;
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .gender-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .g-btn {
+      flex: 1;
+      padding: 7px 4px;
+      border: 1.5px solid #E2E8F0;
+      background: #fff;
+      border-radius: 7px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all .1s;
+      font-family: inherit;
+    }
+
+    .g-btn.sel-male    { background: #DBEAFE; border-color: #93C5FD; color: #1E40AF; font-weight: 600; }
+    .g-btn.sel-female  { background: #FCE7F3; border-color: #F9A8D4; color: #BE185D; font-weight: 600; }
+    .g-btn.sel-unknown { background: #F1F5F9; border-color: #CBD5E1; color: #475569; font-weight: 600; }
+
+    .form-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .btn-save {
+      flex: 2; padding: 9px;
+      background: #1E293B; color: #fff;
+      border: none; border-radius: 7px;
+      font-size: 13px; cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-save:hover { background: #334155; }
+
+    .btn-cancel {
+      flex: 1; padding: 9px;
+      border: 1px solid #E2E8F0; background: #fff;
+      border-radius: 7px; font-size: 13px;
+      cursor: pointer; font-family: inherit;
+    }
+
+    .btn-cancel:hover { background: #F8FAFC; }
+
+    .btn-delete {
+      padding: 9px 14px;
+      border: 1px solid #FCA5A5; background: #fff;
+      color: #DC2626; border-radius: 7px;
+      font-size: 13px; cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-delete:hover { background: #FEF2F2; }
+
+    /* ── Side panel ─────────────────────────────── */
+    #side-panel {
+      position: fixed;
+      right: 0; top: 52px; bottom: 0;
+      width: 270px;
+      background: #fff;
+      border-left: 1px solid #E2E8F0;
+      z-index: 20;
+      overflow-y: auto;
+      padding: 20px 18px;
+    }
+
+    #side-panel h3 { font-size: 15px; font-weight: 700; }
+
+    .panel-meta { font-size: 12px; color: #94A3B8; margin: 2px 0 6px; }
+
+    .panel-job {
+      font-size: 12px;
+      color: #475569;
+      font-style: italic;
+      margin-bottom: 4px;
+    }
+
+    .panel-notes {
+      font-size: 12px;
+      color: #64748B;
+      line-height: 1.55;
+      margin-bottom: 18px;
+      white-space: pre-wrap;
+    }
+
+    .panel-section { margin-bottom: 22px; }
+
+    .panel-section h4 {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #94A3B8;
+      margin-bottom: 8px;
+    }
+
+    .rel-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      border-radius: 7px;
+      margin-bottom: 5px;
+      font-size: 13px;
+    }
+
+    .rel-chip span { line-height: 1.3; }
+    .rel-chip small { font-size: 10px; opacity: .55; display: block; }
+
+    .chip-male    { background: #DBEAFE; }
+    .chip-female  { background: #FCE7F3; }
+    .chip-unknown { background: #F1F5F9; }
+
+    .chip-rm {
+      background: none; border: none;
+      cursor: pointer; color: #CBD5E1;
+      font-size: 17px; padding: 0 2px;
+      line-height: 1; flex-shrink: 0;
+    }
+
+    .chip-rm:hover { color: #EF4444; }
+
+    .btn-add-rel {
+      width: 100%; padding: 7px;
+      border: 1px dashed #CBD5E1;
+      background: transparent;
+      border-radius: 6px;
+      font-size: 12px; color: #64748B;
+      cursor: pointer; margin-top: 4px;
+      font-family: inherit;
+    }
+
+    .btn-add-rel:hover { border-color: #94A3B8; color: #374151; }
+
+    .panel-close {
+      position: absolute; top: 14px; right: 14px;
+      background: none; border: none;
+      font-size: 20px; line-height: 1;
+      cursor: pointer; color: #CBD5E1;
+    }
+
+    .panel-close:hover { color: #475569; }
+
+    /* ── Zoom controls ──────────────────────────── */
+    #zoom-controls {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      display: flex; flex-direction: column;
+      gap: 4px; z-index: 25;
+    }
+
+    #zoom-controls button {
+      width: 32px; height: 32px;
+      border: 1px solid #E2E8F0;
+      background: #fff; border-radius: 7px;
+      font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+      color: #475569;
+    }
+
+    #zoom-controls button:hover { background: #F1F5F9; }
+
+    /* ── Legend ─────────────────────────────────── */
+    #legend {
+      position: fixed;
+      bottom: 20px; left: 20px;
+      display: flex; gap: 10px;
+      z-index: 25;
+    }
+
+    .legend-item {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; color: #94A3B8;
+    }
+
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 3px;
+      border: 1.5px solid;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Family Tree</h1>
+  <div class="header-actions">
+    <button class="btn-ghost" id="btn-new" onclick="resetTree()" style="display:none">New Tree</button>
+  </div>
+</header>
+
+<div id="canvas-wrapper">
+  <div id="canvas">
+    <svg id="svg-layer"></svg>
+    <div id="nodes-layer"></div>
+  </div>
+</div>
+
+<div id="empty-state">
+  <p>Start your family tree</p>
+  <button class="btn-primary" onclick="openModal({type:'root'})">Add yourself</button>
+</div>
+
+<!-- ── Modal ──────────────────────────────────────── -->
+<div id="modal-overlay" class="overlay hidden">
+  <div class="modal">
+    <h2 id="modal-title">Add Person</h2>
+    <div class="form-field">
+      <label>Name</label>
+      <input id="field-name" type="text" placeholder="Full name" autocomplete="off">
+    </div>
+    <div class="form-field">
+      <label>Gender</label>
+      <div class="gender-row">
+        <button class="g-btn sel-unknown" data-g="unknown" onclick="pickGender('unknown')">Unknown</button>
+        <button class="g-btn" data-g="male"    onclick="pickGender('male')">Male</button>
+        <button class="g-btn" data-g="female"  onclick="pickGender('female')">Female</button>
+      </div>
+    </div>
+    <div class="form-field">
+      <label>Birth Year</label>
+      <input id="field-birth" type="number" placeholder="e.g. 1985" min="1" max="2100">
+    </div>
+    <div class="form-field">
+      <label>Job / Occupation</label>
+      <input id="field-job" type="text" placeholder="e.g. Teacher, Engineer…" autocomplete="off">
+    </div>
+    <div class="form-field">
+      <label>Interesting Info</label>
+      <textarea id="field-notes" rows="3" placeholder="Hobbies, achievements, fun facts…"></textarea>
+    </div>
+    <div class="form-actions" id="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Side panel ─────────────────────────────────── -->
+<div id="side-panel" class="hidden">
+  <button class="panel-close" onclick="closePanel()">×</button>
+  <h3 id="panel-name"></h3>
+  <div class="panel-meta" id="panel-meta"></div>
+  <div class="panel-job" id="panel-job"></div>
+  <div class="panel-notes" id="panel-notes"></div>
+
+  <div class="panel-section">
+    <h4>Siblings</h4>
+    <div id="siblings-list"></div>
+    <button class="btn-add-rel" onclick="openRelModal('sibling')">+ Add sibling</button>
+  </div>
+
+  <div class="panel-section">
+    <h4>Partners</h4>
+    <div id="partners-list"></div>
+    <button class="btn-add-rel" onclick="openRelModal('partner')">+ Add partner</button>
+  </div>
+</div>
+
+<!-- hidden file input for photo uploads -->
+<input type="file" id="photo-input" accept="image/*" style="display:none">
+
+<!-- ── Zoom ───────────────────────────────────────── -->
+<div id="zoom-controls">
+  <button onclick="adjustZoom(1.2)" title="Zoom in">+</button>
+  <button onclick="adjustZoom(0.83)" title="Zoom out">−</button>
+  <button onclick="resetZoom()" title="Reset zoom" style="font-size:11px">fit</button>
+</div>
+
+<div id="legend">
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#DBEAFE;border-color:#93C5FD"></div> Male
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#FCE7F3;border-color:#F9A8D4"></div> Female
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#F1F5F9;border-color:#CBD5E1"></div> Unknown
+  </div>
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const NW = 164, NH_BASE = 130, HG = 36, VG = 72;
+const PADDING = 40;
+
+const COLORS = {
+  male:    { bg: '#DBEAFE', border: '#93C5FD', text: '#1E40AF' },
+  female:  { bg: '#FCE7F3', border: '#F9A8D4', text: '#BE185D' },
+  unknown: { bg: '#F1F5F9', border: '#CBD5E1', text: '#334155' },
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let people = {};
+let rootId  = null;
+let counter = 0;
+let scale   = 1;
+
+let modal = null;       // current modal context
+let panelId = null;     // current side panel person id
+let selGender = 'unknown';
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('ft_v1', JSON.stringify({ people, rootId, counter }));
+}
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem('ft_v1') || 'null');
+    if (!d) return;
+    people  = d.people  || {};
+    rootId  = d.rootId  || null;
+    counter = d.counter || 0;
+  } catch (e) { /* ignore */ }
+}
+
+// ── Data helpers ──────────────────────────────────────────────────────────────
+function newId() { return 'p' + (++counter); }
+
+function addPerson({ name, gender = 'unknown', birthYear = '', job = '', notes = '' }) {
+  const id = newId();
+  people[id] = { id, name, gender, birthYear, job, notes, parentIds: [], siblings: [], partners: [] };
+  return id;
+}
+
+function canDelete(id) {
+  return !Object.values(people).some(p => p.parentIds.includes(id));
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+function layoutNode(id, depth, xStart) {
+  const p = people[id];
+  if (!p) return { pos: {}, xEnd: xStart, cx: xStart + NW / 2 };
+
+  const pos = {};
+
+  if (!p.parentIds.length) {
+    pos[id] = { x: xStart, y: depth * (NH_BASE + VG) };
+    return { pos, xEnd: xStart + NW + HG, cx: xStart + NW / 2 };
+  }
+
+  let x = xStart;
+  const cxs = [];
+
+  for (const pid of p.parentIds) {
+    const r = layoutNode(pid, depth + 1, x);
+    Object.assign(pos, r.pos);
+    cxs.push(r.cx);
+    x = r.xEnd;
+  }
+
+  const cx = cxs.reduce((a, b) => a + b, 0) / cxs.length;
+  pos[id] = { x: cx - NW / 2, y: depth * (NH_BASE + VG) };
+  return { pos, xEnd: x, cx };
+}
+
+function computeLayout() {
+  if (!rootId) return {};
+  return layoutNode(rootId, 0, PADDING).pos;
+}
+
+// ── Person SVG silhouette ─────────────────────────────────────────────────────
+function personSvg(gender, color, w = 11, h = 14) {
+  const head = `<circle cx="7" cy="4.5" r="3" fill="${color}"/>`;
+  let body;
+  if (gender === 'female') {
+    body = `<path d="M1,17 Q4,9.5 7,9.5 Q10,9.5 13,17 Z" fill="${color}"/>`;
+  } else if (gender === 'male') {
+    body = `<path d="M2,17 L2,10 Q7,8.5 12,10 L12,17 Z" fill="${color}"/>`;
+  } else {
+    body = `<path d="M2.5,17 L2.5,10.5 Q7,9 11.5,10.5 L11.5,17 Z" fill="${color}"/>`;
+  }
+  return `<svg viewBox="0 0 14 18" width="${w}" height="${h}" style="display:block">${head}${body}</svg>`;
+}
+
+// Camera icon SVG (white, for overlay hints)
+const CAM_SVG = `<svg viewBox="0 0 16 14" width="11" height="10" fill="white" style="display:block">
+  <rect x="1" y="3" width="14" height="10" rx="2"/>
+  <circle cx="8" cy="8" r="2.8" fill="none" stroke="white" stroke-width="1.4"/>
+  <rect x="5.5" y="1" width="5" height="2.5" rx="1"/>
+</svg>`;
+
+// ── Node avatar HTML ──────────────────────────────────────────────────────────
+function avatarHtml(photo, gender, color, clickFn, title) {
+  const inner = photo
+    ? `<div class="node-avatar" onclick="${clickFn}" title="${title}"
+            style="border-color:${color.border};background-image:url('${photo}')">
+         <div class="avatar-overlay">${CAM_SVG}</div>
+       </div>`
+    : `<div class="node-avatar" onclick="${clickFn}" title="${title}"
+            style="background:${color.bg};border-color:${color.border}">
+         ${personSvg(gender, color.text + 'aa', 20, 26)}
+         <div class="avatar-overlay">${CAM_SVG}</div>
+       </div>`;
+  return `<div class="node-avatar-wrap">${inner}</div>`;
+}
+
+// ── Sibling dots ──────────────────────────────────────────────────────────────
+function siblingDots(siblings, personId) {
+  if (!siblings.length) return '';
+  const MAX = 6;
+  const visible = siblings.slice(0, MAX);
+  const extra   = siblings.length - MAX;
+
+  const dots = visible.map((s, i) => {
+    const c = COLORS[s.gender] || COLORS.unknown;
+    if (s.photo) {
+      return `<div class="sib-dot" title="${esc(s.name)}"
+                   style="border-color:${c.border};background-image:url('${s.photo}')"
+                   onclick="openPanel('${personId}')">
+        <div class="sib-photo-hint">${CAM_SVG}</div>
+      </div>`;
+    }
+    return `<div class="sib-dot" title="${esc(s.name)}"
+                 style="background:${c.bg};border-color:${c.border}"
+                 onclick="openPanel('${personId}')">
+      ${personSvg(s.gender, c.text + 'cc')}
+      <div class="sib-photo-hint">${CAM_SVG}</div>
+    </div>`;
+  }).join('');
+
+  const more = extra > 0
+    ? `<div class="sib-more" onclick="openPanel('${personId}')" title="${extra} more">+${extra}</div>`
+    : '';
+
+  return `<div class="sib-dots">${dots}${more}</div>`;
+}
+
+// ── Photo upload ──────────────────────────────────────────────────────────────
+let photoCtx = null; // { type:'person'|'sibling', personId, idx? }
+
+function triggerPhoto(type, personId, idx) {
+  photoCtx = { type, personId, idx };
+  document.getElementById('photo-input').click();
+}
+
+document.getElementById('photo-input').addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file || !photoCtx) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const url = ev.target.result;
+    if (photoCtx.type === 'person') {
+      people[photoCtx.personId].photo = url;
+    } else {
+      people[photoCtx.personId].siblings[photoCtx.idx].photo = url;
+    }
+    save();
+    render();
+    if (panelId) openPanel(panelId);
+  };
+  reader.readAsDataURL(file);
+  this.value = '';
+});
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  const positions = computeLayout();
+  const nodesEl = document.getElementById('nodes-layer');
+  const svgEl   = document.getElementById('svg-layer');
+
+  if (!rootId) {
+    nodesEl.innerHTML = '';
+    svgEl.innerHTML   = '';
+    return;
+  }
+
+  // Canvas sizing
+  const allPos = Object.values(positions);
+  const maxX = Math.max(...allPos.map(p => p.x)) + NW + PADDING;
+  const maxY = Math.max(...allPos.map(p => p.y)) + NH_BASE + PADDING;
+
+  const canvas = document.getElementById('canvas');
+  canvas.style.width  = Math.max(maxX, window.innerWidth)  + 'px';
+  canvas.style.height = Math.max(maxY, window.innerHeight - 52) + 'px';
+  svgEl.style.width   = canvas.style.width;
+  svgEl.style.height  = canvas.style.height;
+
+  // SVG connections
+  let paths = '';
+  for (const [id, p] of Object.entries(positions)) {
+    for (const pid of people[id].parentIds) {
+      const pp = positions[pid];
+      if (!pp) continue;
+      const x1 = p.x + NW / 2,  y1 = p.y + NH_BASE;
+      const x2 = pp.x + NW / 2, y2 = pp.y;
+      const mid = (y1 + y2) / 2;
+      paths += `<path d="M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}"
+        fill="none" stroke="#CBD5E1" stroke-width="1.5" stroke-linecap="round"/>`;
+    }
+  }
+  svgEl.innerHTML = paths;
+
+  // Nodes
+  let html = '';
+  for (const [id, p] of Object.entries(positions)) {
+    const pers    = people[id];
+    const c       = COLORS[pers.gender] || COLORS.unknown;
+    const canAddP = pers.parentIds.length < 2;
+    const pCount  = pers.partners.length;
+
+    const av = avatarHtml(
+      pers.photo, pers.gender, c,
+      `triggerPhoto('person','${id}')`,
+      pers.photo ? 'Change photo' : 'Add photo'
+    );
+
+    html += `
+    <div class="node" id="nd-${id}"
+         style="left:${p.x}px;top:${p.y}px;background:${c.bg};border-color:${c.border}">
+      ${av}
+      <div class="node-name" style="color:${c.text}">${esc(pers.name)}</div>
+      ${pers.birthYear ? `<div class="node-birth" style="color:${c.text}">${pers.birthYear}</div>` : ''}
+      ${pers.job      ? `<div class="node-job"   style="color:${c.text}">${esc(pers.job)}</div>` : ''}
+      ${pers.notes    ? `<div class="node-notes" style="color:${c.text}">${esc(pers.notes)}</div>` : ''}
+      ${siblingDots(pers.siblings, id)}
+      ${pCount > 0
+        ? `<div class="node-partners" onclick="openPanel('${id}')" style="color:${c.text}">${pCount} partner${pCount > 1 ? 's' : ''}</div>`
+        : ''}
+      <div class="node-actions">
+        ${canAddP
+          ? `<button onclick="openModal({type:'parent',childId:'${id}'})">+ Parent</button>`
+          : ''}
+        <button onclick="openPanel('${id}')">Relations</button>
+        <button onclick="openModal({type:'edit',personId:'${id}'})">Edit</button>
+      </div>
+    </div>`;
+  }
+  nodesEl.innerHTML = html;
+  applyScale();
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+function adjustZoom(f) {
+  scale = Math.min(2.5, Math.max(0.25, scale * f));
+  applyScale();
+}
+
+function resetZoom() {
+  scale = 1;
+  applyScale();
+}
+
+function applyScale() {
+  document.getElementById('canvas').style.transform = `scale(${scale})`;
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal(ctx) {
+  modal = ctx;
+  selGender = 'unknown';
+
+  const nameEl  = document.getElementById('field-name');
+  const birthEl = document.getElementById('field-birth');
+  const titleEl = document.getElementById('modal-title');
+  const actEl   = document.getElementById('modal-actions');
+
+  nameEl.value  = '';
+  birthEl.value = '';
+  document.getElementById('field-job').value   = '';
+  document.getElementById('field-notes').value = '';
+
+  if (ctx.type === 'root') {
+    titleEl.textContent = 'Add yourself';
+    actEl.innerHTML = `
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveModal()">Save</button>`;
+  } else if (ctx.type === 'parent') {
+    const child = people[ctx.childId];
+    titleEl.textContent = `Add parent for ${child.name}`;
+    actEl.innerHTML = `
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveModal()">Save</button>`;
+  } else if (ctx.type === 'edit') {
+    const p = people[ctx.personId];
+    titleEl.textContent = `Edit`;
+    nameEl.value  = p.name;
+    birthEl.value = p.birthYear || '';
+    document.getElementById('field-job').value   = p.job   || '';
+    document.getElementById('field-notes').value = p.notes || '';
+    selGender     = p.gender;
+    const delBtn  = canDelete(ctx.personId)
+      ? `<button class="btn-delete" onclick="deletePerson('${ctx.personId}')">Delete</button>`
+      : '';
+    actEl.innerHTML = `
+      ${delBtn}
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveModal()">Save</button>`;
+  } else if (ctx.type === 'rel') {
+    const p = people[ctx.personId];
+    titleEl.textContent = `Add ${ctx.relType} for ${p.name}`;
+    actEl.innerHTML = `
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveModal()">Save</button>`;
+  }
+
+  updateGenderUI();
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  setTimeout(() => nameEl.focus(), 50);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  modal = null;
+}
+
+function pickGender(g) {
+  selGender = g;
+  updateGenderUI();
+}
+
+function updateGenderUI() {
+  document.querySelectorAll('.g-btn').forEach(b => {
+    b.className = 'g-btn';
+    if (b.dataset.g === selGender) b.classList.add('sel-' + selGender);
+  });
+}
+
+function saveModal() {
+  const name = document.getElementById('field-name').value.trim();
+  if (!name) { document.getElementById('field-name').focus(); return; }
+
+  const birthYear = document.getElementById('field-birth').value.trim();
+  const job       = document.getElementById('field-job').value.trim();
+  const notes     = document.getElementById('field-notes').value.trim();
+  const ctx = modal;
+
+  if (ctx.type === 'root') {
+    const id = addPerson({ name, gender: selGender, birthYear, job, notes });
+    rootId = id;
+    document.getElementById('empty-state').classList.add('hidden');
+    document.getElementById('btn-new').style.display = '';
+    closeModal();
+    save();
+    render();
+
+  } else if (ctx.type === 'parent') {
+    const id = addPerson({ name, gender: selGender, birthYear, job, notes });
+    people[ctx.childId].parentIds.push(id);
+    closeModal();
+    save();
+    render();
+
+  } else if (ctx.type === 'edit') {
+    const p = people[ctx.personId];
+    p.name      = name;
+    p.gender    = selGender;
+    p.birthYear = birthYear;
+    p.job       = job;
+    p.notes     = notes;
+    if (panelId === ctx.personId) openPanel(ctx.personId);
+    closeModal();
+    save();
+    render();
+
+  } else if (ctx.type === 'rel') {
+    const p = people[ctx.personId];
+    const rel = { name, gender: selGender, birthYear };
+    if (ctx.relType === 'sibling') p.siblings.push(rel);
+    else p.partners.push(rel);
+    closeModal();
+    save();
+    if (panelId) openPanel(panelId);
+    render(); // refresh badge
+  }
+}
+
+function deletePerson(id) {
+  if (!canDelete(id)) return;
+  // Remove from parent lists
+  for (const p of Object.values(people)) {
+    p.parentIds = p.parentIds.filter(pid => pid !== id);
+  }
+  if (rootId === id) {
+    rootId = null;
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('btn-new').style.display = 'none';
+  }
+  delete people[id];
+  closeModal();
+  closePanel();
+  save();
+  render();
+}
+
+// ── Side panel ────────────────────────────────────────────────────────────────
+function openPanel(id) {
+  panelId = id;
+  const p = people[id];
+
+  document.getElementById('panel-name').textContent = p.name;
+
+  const meta = [];
+  if (p.gender !== 'unknown') meta.push(p.gender.charAt(0).toUpperCase() + p.gender.slice(1));
+  if (p.birthYear) meta.push('b. ' + p.birthYear);
+  document.getElementById('panel-meta').textContent = meta.join(' · ') || ' ';
+  document.getElementById('panel-job').textContent   = p.job   || '';
+  document.getElementById('panel-notes').textContent = p.notes || '';
+
+  renderRelChips('siblings-list', p.siblings, 'sibling');
+  renderRelChips('partners-list', p.partners, 'partner');
+
+  document.getElementById('side-panel').classList.remove('hidden');
+}
+
+function renderRelChips(containerId, arr, type) {
+  document.getElementById(containerId).innerHTML = arr.map((r, i) => {
+    const c = COLORS[r.gender] || COLORS.unknown;
+    const chipAv = r.photo
+      ? `<div class="chip-avatar" style="border-color:${c.border};background-image:url('${r.photo}')"
+              onclick="${type === 'sibling' ? `triggerPhoto('sibling','${panelId}',${i})` : ''}"
+              title="${r.photo ? 'Change photo' : 'Add photo'}">
+           <div class="chip-photo-hint">${CAM_SVG}</div>
+         </div>`
+      : `<div class="chip-avatar" style="background:${c.bg};border-color:${c.border}"
+              onclick="${type === 'sibling' ? `triggerPhoto('sibling','${panelId}',${i})` : ''}"
+              title="Add photo">
+           ${personSvg(r.gender, c.text + 'bb', 14, 18)}
+           <div class="chip-photo-hint">${CAM_SVG}</div>
+         </div>`;
+    return `
+    <div class="rel-chip chip-${r.gender || 'unknown'}">
+      <div class="chip-left">
+        ${type === 'sibling' ? chipAv : ''}
+        <span>
+          <strong>${esc(r.name)}</strong>
+          ${r.birthYear ? `<small>b. ${r.birthYear}</small>` : ''}
+        </span>
+      </div>
+      <button class="chip-rm" onclick="removeRel('${type}',${i})" title="Remove">×</button>
+    </div>`;
+  }).join('');
+}
+
+function removeRel(type, i) {
+  const p = people[panelId];
+  if (type === 'sibling') p.siblings.splice(i, 1);
+  else p.partners.splice(i, 1);
+  save();
+  render();
+  openPanel(panelId);
+}
+
+function openRelModal(relType) {
+  if (!panelId) return;
+  openModal({ type: 'rel', relType, personId: panelId });
+}
+
+function closePanel() {
+  document.getElementById('side-panel').classList.add('hidden');
+  panelId = null;
+}
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+function resetTree() {
+  if (!confirm('Start a new tree? All data will be cleared.')) return;
+  people  = {};
+  rootId  = null;
+  counter = 0;
+  scale   = 1;
+  document.getElementById('empty-state').classList.remove('hidden');
+  document.getElementById('btn-new').style.display = 'none';
+  closePanel();
+  save();
+  render();
+}
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (!document.getElementById('modal-overlay').classList.contains('hidden')) closeModal();
+    else closePanel();
+  }
+  if (e.key === 'Enter' && !document.getElementById('modal-overlay').classList.contains('hidden')) {
+    if (document.activeElement.tagName !== 'BUTTON') saveModal();
+  }
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+load();
+if (rootId) {
+  document.getElementById('empty-state').classList.add('hidden');
+  document.getElementById('btn-new').style.display = '';
+}
+render();
+</script>
+</body>
+</html>
